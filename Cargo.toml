@@ -1,0 +1,8 @@
+[package]
+name = "rust-mnist"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+ndarray = { version = "0.16", features = ["blas"] }
+mnist = { version = "0.6.0" }
