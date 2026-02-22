@@ -6,3 +6,4 @@ edition = "2024"
 [dependencies]
 ndarray = { version = "0.16", features = ["blas"] }
 mnist = { version = "0.6.0" }
+rand = { version = "0.10.0" }

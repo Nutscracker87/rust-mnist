@@ -1,8 +1,9 @@
 use mnist::*;
-// use ndarray::{Array1, Array2, Array3, ArrayView1, ArrayView2, Axis, azip, s};
 use crate::sample::Sample;
 
 pub const TRAINING_SET_PATH: &str = "data";
+pub const INPUT_PIXELS: usize = 784;
+pub const ONE_HOT_OUTPUT_VECTOR_SIZE: usize = 10;
 
 pub struct MnistData {
     pub training_data_set: Vec<Sample>,
@@ -28,16 +29,16 @@ impl MnistData {
             .normalize();
 
         let training_data_set: Vec<Sample> = trn_img
-            .chunks(784)
-            .zip(trn_lbl.chunks(10))
+            .chunks(INPUT_PIXELS)
+            .zip(trn_lbl.chunks(ONE_HOT_OUTPUT_VECTOR_SIZE))
             .map(|(digit_pixels, digit_label)| {
                 Sample::new(digit_pixels, digit_label)
             })
             .collect();
 
         let test_data_set: Vec<Sample> = tst_img
-            .chunks(784)
-            .zip(tst_lbl.chunks(10))
+            .chunks(INPUT_PIXELS)
+            .zip(tst_lbl.chunks(ONE_HOT_OUTPUT_VECTOR_SIZE))
             .map(|(digit_pixels, digit_label)| {
                 Sample::new(digit_pixels, digit_label)
             })
