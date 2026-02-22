@@ -1,21 +1,17 @@
 use mnist::*;
-use ndarray::{Array1, Array2, Array3, s};
+// use ndarray::{Array1, Array2, Array3, ArrayView1, ArrayView2, Axis, azip, s};
+use crate::sample::Sample;
 
 pub const TRAINING_SET_PATH: &str = "data";
 
-pub struct Sample {
-    image: Array1<f32>,
-    label: Array1<f32>
-}
-
 pub struct MnistData {
     pub training_data_set: Vec<Sample>,
-    pub test_data_set: Vec<Sample>
+    pub test_data_set: Vec<Sample>,
 }
 
 impl MnistData {
-    pub fn new() {
-        let Mnist {
+    pub fn new() -> Self {
+        let NormalizedMnist {
             trn_img,
             trn_lbl,
             tst_img,
@@ -28,30 +24,28 @@ impl MnistData {
             .training_set_length(50_000)
             .validation_set_length(10_000)
             .test_set_length(10_000)
-            .finalize();
+            .finalize()
+            .normalize();
 
-        let image_num = 0;
-        // Can use an Array2 or Array3 here (Array3 for visualization)
-        let train_data = Array3::from_shape_vec((50_000, 28, 28), trn_img)
-            .expect("Error converting images to Array3 struct")
-            .map(|x| *x as f32 / 256.0); // division by 256.0 is a trick to improve the logic resilience a little be. This way we will no work with 1.0
-        println!("{:#.2?}\n", train_data.slice(s![image_num, .., ..]));
+        let training_data_set: Vec<Sample> = trn_img
+            .chunks(784)
+            .zip(trn_lbl.chunks(10))
+            .map(|(digit_pixels, digit_label)| {
+                Sample::new(digit_pixels, digit_label)
+            })
+            .collect();
 
-        // Convert the returned Mnist struct to Array2 format
-        let train_labels: Array2<f32> = Array2::from_shape_vec((50_000, 10), trn_lbl)
-            .expect("Error converting training labels to Array2 struct")
-            .map(|x| *x as f32);
-        println!(
-            "The first digit is a {:?}",
-            train_labels.slice(s![image_num, ..])
-        );
+        let test_data_set: Vec<Sample> = tst_img
+            .chunks(784)
+            .zip(tst_lbl.chunks(10))
+            .map(|(digit_pixels, digit_label)| {
+                Sample::new(digit_pixels, digit_label)
+            })
+            .collect();
 
-        let _test_data = Array3::from_shape_vec((10_000, 28, 28), tst_img)
-            .expect("Error converting images to Array3 struct")
-            .map(|x| *x as f32 / 256.);
-
-        let _test_labels: Array2<f32> = Array2::from_shape_vec((10_000, 10), tst_lbl)
-            .expect("Error converting testing labels to Array2 struct")
-            .map(|x| *x as f32);
+        Self {
+            training_data_set,
+            test_data_set,
+        }
     }
 }
