@@ -87,8 +87,14 @@ impl Network {
 
         // Update weights and biases step
         for i in 0..self.layers.len() {
-            self.layers[i].update_weights(self.learning_rate/(batch.len() as f32), accumulated_grad_w[i].view());
-            self.layers[i].update_biases(self.learning_rate/(batch.len() as f32), accumulated_grad_b[i].view());
+            self.layers[i].update_weights(
+                -self.learning_rate / (batch.len() as f32),
+                accumulated_grad_w[i].view(),
+            );
+            self.layers[i].update_biases(
+                -self.learning_rate / (batch.len() as f32),
+                accumulated_grad_b[i].view(),
+            );
         }
         //println!("--------End processing mini batch ------------");
         // Update weights and biases step
@@ -118,7 +124,7 @@ impl Network {
         }
     }
 
-    pub fn predict(&self, sample: &Sample) -> Array1<f32> {
+    pub fn predict(&self, sample: &Sample) -> usize {
         let mut layers_activations: Vec<Array1<f32>> = Vec::new();
         // let mut layers_z: Vec<Array1<f32>> = Vec::new();
 
@@ -131,7 +137,21 @@ impl Network {
             current_layer_activations = activations;
         }
 
-        current_layer_activations
+        //current_layer_activations
+        let (predicted, _) = current_layer_activations.
+            iter().enumerate()
+            .fold(
+            (0, 0.0),
+            |(max_idx, max_val), (idx, &val)| {
+                if val > max_val {
+                    (idx, val)
+                } else {
+                    (max_idx, max_val)
+                }
+            }
+        );
+
+        predicted
     }
 
     // * **Forward:** Feed input through each layer; store each layer's output **a** and pre-sigmoid sum **z**. → `forward(network_input)` → `all_layers_outputs`, `all_weighted_sums`

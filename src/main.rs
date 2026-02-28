@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use rand::seq::SliceRandom;
 
 use crate::network::Network;
@@ -13,11 +15,29 @@ fn main() {
     let mut rng = rand::rng();
 
     for i in 0..network::MAX_EPOCH {
-        println!("Training epoch: {}", i);
+        let epoch_start = Instant::now();
         // need to shuffle data for better learning, by default mnist is ordered sequentially by digit class.
         // we need to shuffle data for each epoch to get better results
         data.training_data_set.shuffle(&mut rng);
         nn.run_training_epoch(&data.training_data_set);
+
+        let mut properly_predicted_count = 0;
+        for sample in &data.test_data_set {
+            let predicted_digit = nn.predict(&sample);
+            if predicted_digit == sample.get_label_as_digit() {
+                properly_predicted_count += 1;
+            }
+        }
+
+        let epoch_secs = epoch_start.elapsed().as_secs_f64();
+        println!(
+            "  Epoch {}/{}: {}/{} correct ({:.2}s)",
+            i + 1,
+            network::MAX_EPOCH,
+            properly_predicted_count,
+            data.test_data_set.len(),
+            epoch_secs
+        );
     }
 
     // let first_digit = data
