@@ -23,7 +23,7 @@ impl Sample {
     }
 
     // mnist visualisation. A Simple Implementation (The "Block" Method)
-    pub fn dispaly_digit(&self) {
+    pub fn display_digit(&self) {
         //let image: Array2<f32> = Array2::from_shape_vec((28, 28), pixels.to_vec()).unwrap();
         let image_to_process: Array2<f32> =
             Array2::from_shape_vec((28, 28), self.image.to_vec()).unwrap();
