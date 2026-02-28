@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use ndarray::{Array, Array1, Array2, ArrayView1, Axis};
+use ndarray::{Array, Array1, Array2, ArrayView1, ArrayView2, Axis};
 use rand::prelude::*;
 
 use crate::sample::Sample;
@@ -21,11 +21,19 @@ pub fn weight_init_value() -> f32 {
 
 impl Layer {
     pub fn new(inputs: usize, num_neurons: usize) -> Self {
-        let mut weights: Array2<f32> =
+        let weights: Array2<f32> =
             Array::from_shape_fn((num_neurons, inputs), |_| weight_init_value());
-        let mut biases: Array1<f32> = Array1::<f32>::zeros(num_neurons);
+        let biases: Array1<f32> = Array1::<f32>::zeros(num_neurons);
 
         Self { weights, biases }
+    }
+
+    pub fn update_weights(&mut self, step: f32, gradients_w: ArrayView2<f32>) {
+        self.weights.scaled_add(step, &gradients_w);
+    }
+
+    pub fn update_biases(&mut self, step: f32, gradients_b: ArrayView1<f32>) {
+        self.biases.scaled_add(step, &gradients_b);
     }
 }
 
@@ -48,7 +56,7 @@ impl Network {
     }
 
     // Stochastic Gradient Descent (SGD) approach with mini batches
-    pub fn run_training_epoch(&self, training_data_set: &[Sample]) {
+    pub fn run_training_epoch(&mut self, training_data_set: &[Sample]) {
         // let mut test = training_data_set.chunks(1);
         // self.train(test.next().unwrap());
         // split training data set to mini batches as a part of SGD
@@ -57,7 +65,8 @@ impl Network {
         }
     }
 
-    pub fn process_batch(&self, batch: &[Sample]) {
+    pub fn process_batch(&mut self, batch: &[Sample]) {
+        //println!("--------Start processing mini batch ------------");
         let mut accumulated_grad_w: Vec<Array2<f32>> = Vec::new();
         let mut accumulated_grad_b: Vec<Array1<f32>> = Vec::new();
 
@@ -77,6 +86,52 @@ impl Network {
         }
 
         // Update weights and biases step
+        for i in 0..self.layers.len() {
+            self.layers[i].update_weights(self.learning_rate/(batch.len() as f32), accumulated_grad_w[i].view());
+            self.layers[i].update_biases(self.learning_rate/(batch.len() as f32), accumulated_grad_b[i].view());
+        }
+        //println!("--------End processing mini batch ------------");
+        // Update weights and biases step
+    }
+
+    pub fn visualize_matrix(matrix: Array2<f32>) {
+        let (_, cols) = matrix.dim();
+        // Grabs chunks of 2 rows at a time
+        for chunk in matrix.axis_chunks_iter(ndarray::Axis(0), 2) {
+            let top_row = chunk.row(0);
+            // Handle odd-numbered total rows
+            let bottom_row = if chunk.nrows() > 1 {
+                Some(chunk.row(1))
+            } else {
+                None
+            };
+
+            for x in 0..cols {
+                let t_val = top_row[x];
+                let b_val = bottom_row.map(|r| r[x]).unwrap_or(0.0);
+
+                let t_clr = 232 + (t_val * 23.0) as u8;
+                let b_clr = 232 + (b_val * 23.0) as u8;
+                print!("\x1b[38;5;{}m\x1b[48;5;{}m▀", t_clr, b_clr);
+            }
+            println!("\x1b[0m");
+        }
+    }
+
+    pub fn predict(&self, sample: &Sample) -> Array1<f32> {
+        let mut layers_activations: Vec<Array1<f32>> = Vec::new();
+        // let mut layers_z: Vec<Array1<f32>> = Vec::new();
+
+        let mut current_layer_activations: Array1<f32> = sample.get_image().to_owned();
+        //---------Forward step---
+        for layer in &self.layers {
+            let z: Array1<f32> = layer.weights.dot(&current_layer_activations) + &layer.biases;
+            let activations: Array1<f32> = z.mapv(Network::sigmoid);
+            layers_activations.push(current_layer_activations);
+            current_layer_activations = activations;
+        }
+
+        current_layer_activations
     }
 
     // * **Forward:** Feed input through each layer; store each layer's output **a** and pre-sigmoid sum **z**. → `forward(network_input)` → `all_layers_outputs`, `all_weighted_sums`
@@ -86,11 +141,10 @@ impl Network {
         // let targets = sample.get_label().to_owned();
 
         // first (input) layer have no the activation method and always equal inputs
-        let mut layers_activations: Vec<Array1<f32>> = Vec::with_capacity(self.layers.len() + 1);
+        let mut layers_activations: Vec<Array1<f32>> = Vec::new();
         let mut layers_z: Vec<Array1<f32>> = Vec::new();
 
         let mut current_layer_activations: Array1<f32> = sample.get_image().to_owned();
-
         //---------Forward step---
         for layer in &self.layers {
             // println!("cur layer a: {:?}", current_layer_activations.shape());
@@ -146,9 +200,9 @@ impl Network {
         let mut current_layer_deltas: Array1<f32> = last_layer_deltas;
         // hidden layers deltas: $\delta^l = (W^{l+1})^T \delta^{l+1} \odot \sigma'(z^l)$
         for i in (0..self.layers.len() - 1).rev() {
-            let layer_to_right = self.layers[i+1].weights.view();
+            let layer_to_right = self.layers[i + 1].weights.view();
             current_layer_deltas = layer_to_right.t().dot(&current_layer_deltas)
-             * layers_z[i].mapv(Network::sigmoid_derivative);
+                * layers_z[i].mapv(Network::sigmoid_derivative);
 
             // current_layer_deltas = d.view();
             deltas.push(current_layer_deltas.clone());
@@ -168,24 +222,27 @@ impl Network {
         deltas: Vec<Array1<f32>>,
         activations: &[Array1<f32>],
     ) -> (Vec<Array2<f32>>, Vec<Array1<f32>>) {
-        let mut all_gradients: Vec<Array2<f32>> = Vec::with_capacity(self.layers.len() - 1);
+        let mut all_gradients: Vec<Array2<f32>> = Vec::new();
 
         // deltas have for one element less then activations - but we will not count last activation
         // because it's last layer output activation. The first layer activations - will be pure inputs
+        // println!("--------Start ----------");
         for l in 0..self.layers.len() {
             // reshape arrays to matrix form N x 1
             let deltas_matrix = deltas[l].view().insert_axis(Axis(1));
             // reshape arrays to matrix form 1 x M
             let a = activations[l].view().insert_axis(Axis(0));
+            // println!("Will find dot product between deltas: {:?}", deltas_matrix);
+            // println!("And activations: {:?}", a);
             // result will b e matrix N x M
             let grads = deltas_matrix.dot(&a);
 
             all_gradients.push(grads);
         }
-
+        // println!("--------End ----------");
         // the bias gradients aqual deltas
         let bias_gradients: Vec<Array1<f32>> = deltas;
-        
+
         (all_gradients, bias_gradients)
     }
 

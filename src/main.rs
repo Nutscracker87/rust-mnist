@@ -9,10 +9,11 @@ pub mod sample;
 fn main() {
     println!("Hello, my new neural network!");
     let mut data = data_loader::MnistData::new();
-    let nn = Network::new(&[data_loader::INPUT_PIXELS, 32, 10], 3.0);
+    let mut nn = Network::new(&[data_loader::INPUT_PIXELS, 32, 10], 3.0);
     let mut rng = rand::rng();
 
     for i in 0..network::MAX_EPOCH {
+        println!("Training epoch: {}", i);
         // need to shuffle data for better learning, by default mnist is ordered sequentially by digit class.
         // we need to shuffle data for each epoch to get better results
         data.training_data_set.shuffle(&mut rng);
