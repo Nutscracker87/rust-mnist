@@ -125,21 +125,11 @@ impl Network {
     }
 
     pub fn predict(&self, sample: &Sample) -> usize {
-        let mut layers_activations: Vec<Array1<f32>> = Vec::new();
-        // let mut layers_z: Vec<Array1<f32>> = Vec::new();
-
-        let mut current_layer_activations: Array1<f32> = sample.get_image().to_owned();
-        //---------Forward step---
-        for layer in &self.layers {
-            let z: Array1<f32> = layer.weights.dot(&current_layer_activations) + &layer.biases;
-            let activations: Array1<f32> = z.mapv(Network::sigmoid);
-            layers_activations.push(current_layer_activations);
-            current_layer_activations = activations;
-        }
-
+        let (layers_activations, _) = self.forward(sample);
         //current_layer_activations
-        let (predicted, _) = current_layer_activations.
-            iter().enumerate()
+        let (predicted, _) = layers_activations.last().expect("Last layer activations should exists")
+            .iter()
+            .enumerate()
             .fold(
             (0, 0.0),
             |(max_idx, max_val), (idx, &val)| {
@@ -154,12 +144,7 @@ impl Network {
         predicted
     }
 
-    // * **Forward:** Feed input through each layer; store each layer's output **a** and pre-sigmoid sum **z**. → `forward(network_input)` → `all_layers_outputs`, `all_weighted_sums`
-    // * **Deltas:** Output layer: δ = (a − target) ⊙ σ'(z). Hidden layers (from last hidden backward): $\delta^l = (W^{l+1})^T \delta^{l+1} \odot \sigma'(z^l)$. → `compute_deltas(...)`
-    // * **Gradients:** ∂C/∂b = δ; ∂C/∂w = δ ⊗ a_prev (outer product). Return gradients for all layers. → `compute_gradients(layers_deltas, all_layers_outputs)`
-    pub fn backprop(&self, sample: &Sample) -> (Vec<Array2<f32>>, Vec<Array1<f32>>) {
-        // let targets = sample.get_label().to_owned();
-
+    pub fn forward(&self, sample: &Sample) -> (Vec<Array1<f32>>, Vec<Array1<f32>>) {
         // first (input) layer have no the activation method and always equal inputs
         let mut layers_activations: Vec<Array1<f32>> = Vec::new();
         let mut layers_z: Vec<Array1<f32>> = Vec::new();
@@ -167,9 +152,6 @@ impl Network {
         let mut current_layer_activations: Array1<f32> = sample.get_image().to_owned();
         //---------Forward step---
         for layer in &self.layers {
-            // println!("cur layer a: {:?}", current_layer_activations.shape());
-            // println!("cur layer weights: {:?}", layer.weights);
-            // println!("cur layer biases: {:?}", layer.biases);
             let z: Array1<f32> = layer.weights.dot(&current_layer_activations) + &layer.biases;
             let activations: Array1<f32> = z.mapv(Network::sigmoid);
             // On each iteration we are adding outputs from previous step (for first layer it's inputs):
@@ -183,7 +165,14 @@ impl Network {
         }
 
         layers_activations.push(current_layer_activations);
-        //------End of Forward Step----------
+
+        (layers_activations, layers_z)
+    }
+    // * **Forward:** Feed input through each layer; store each layer's output **a** and pre-sigmoid sum **z**. → `forward(network_input)` → `all_layers_outputs`, `all_weighted_sums`
+    // * **Deltas:** Output layer: δ = (a − target) ⊙ σ'(z). Hidden layers (from last hidden backward): $\delta^l = (W^{l+1})^T \delta^{l+1} \odot \sigma'(z^l)$. → `compute_deltas(...)`
+    // * **Gradients:** ∂C/∂b = δ; ∂C/∂w = δ ⊗ a_prev (outer product). Return gradients for all layers. → `compute_gradients(layers_deltas, all_layers_outputs)`
+    pub fn backprop(&self, sample: &Sample) -> (Vec<Array2<f32>>, Vec<Array1<f32>>) {
+        let (layers_activations, layers_z) = self.forward(sample);
 
         let deltas: Vec<Array1<f32>> =
             self.compute_deltas(&layers_activations, layers_z, sample.get_label());
@@ -275,8 +264,4 @@ impl Network {
     pub fn sigmoid_derivative(z: f32) -> f32 {
         Network::sigmoid(z) * (1.0 - Network::sigmoid(z))
     }
-
-    // pub fn backprop(&self) {
-
-    // }
 }
