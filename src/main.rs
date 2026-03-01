@@ -79,7 +79,7 @@ fn test_nn_and_print_results(
 /// Train a small MLP on MNIST and report accuracy each epoch. Optionally print weight visualisations at the end.
 /// Use `--digit N` or `-d N` (N 0-9) to visualise that digit; otherwise a random digit is chosen.
 fn main() {
-    println!("Hello, my new neural network!");
+    println!("rust-mnist: training on MNIST...");
     let mut data = data_loader::MnistData::new();
     let mut nn = Network::new(&[data_loader::INPUT_PIXELS, 36, 10], 3.0);
     let mut rng = rand::rng();
