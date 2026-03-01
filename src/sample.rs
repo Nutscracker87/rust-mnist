@@ -3,6 +3,7 @@
 use ndarray::{Array1, Array2, ArrayView1};
 
 /// One training or test example: 784 normalized pixels and a 10-dim one-hot label.
+#[derive(Clone)]
 pub struct Sample {
     image: Array1<f32>,
     label: Array1<f32>,

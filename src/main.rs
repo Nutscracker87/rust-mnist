@@ -1,5 +1,6 @@
 use std::time::Instant;
 
+use ndarray::Array1;
 use rand::{RngExt, seq::SliceRandom};
 
 use crate::{network::Network, sample::Sample};
@@ -37,31 +38,26 @@ fn test_nn_and_print_results(
 ) {
     let mut properly_predicted_count = 0;
     let visualise_times: usize = 2;
-    let mut print_predicted_count = 0;
-    let mut print_wrong_count = 0;
+    let mut correctly_recognised_samples_to_print: Vec<(Vec<Array1<f32>>, Sample)> = Vec::new();
+    let mut incorrectly_recognised_samples_to_print: Vec<(Vec<Array1<f32>>, Sample, usize)> =
+        Vec::new();
 
     for sample in test_data_set {
         let should_print =
             epoch == network::MAX_EPOCH && sample.get_label_as_digit() == digit_to_display;
         let (predicted_digit, layers_activations) = nn.predict(sample);
         if predicted_digit == sample.get_label_as_digit() {
-            if should_print && print_predicted_count < visualise_times {
-                println!(
-                    "Properly predicted digit recognised as: {}",
-                    predicted_digit
-                );
-                nn.display_active_weights(&layers_activations, sample);
-                print_predicted_count += 1;
-            }
             properly_predicted_count += 1;
+            if should_print && correctly_recognised_samples_to_print.len() < visualise_times {
+                correctly_recognised_samples_to_print.push((layers_activations, sample.clone()));
+            }
         } else {
-            if should_print && print_wrong_count < visualise_times {
-                println!(
-                    "Incorrectly predicted digit recognised as: {}",
-                    predicted_digit
-                );
-                nn.display_active_weights(&layers_activations, sample);
-                print_wrong_count += 1;
+            if should_print && incorrectly_recognised_samples_to_print.len() < visualise_times {
+                incorrectly_recognised_samples_to_print.push((
+                    layers_activations,
+                    sample.clone(),
+                    predicted_digit,
+                ));
             }
         }
     }
@@ -74,12 +70,25 @@ fn test_nn_and_print_results(
         test_data_set.len(),
         epoch_secs
     );
+
+    for (layers_activations, sample) in &correctly_recognised_samples_to_print {
+        println!(
+            "Properly predicted digit recognised as: {}",
+            sample.get_label_as_digit()
+        );
+        nn.display_active_weights(layers_activations, sample);
+    }
+    
+    for (layers_activations, sample, predicted_digit) in &incorrectly_recognised_samples_to_print {
+        println!("Incorrectly predicted digit recognised as: {}", predicted_digit);
+        nn.display_active_weights(layers_activations, sample);
+    }
 }
 
 /// Train a small MLP on MNIST and report accuracy each epoch. Optionally print weight visualisations at the end.
 /// Use `--digit N` or `-d N` (N 0-9) to visualise that digit; otherwise a random digit is chosen.
 fn main() {
-    println!("rust-mnist: training on MNIST...");
+    println!("rust-mnist: training on MNIST... ({} epochs)", network::MAX_EPOCH);
     let mut data = data_loader::MnistData::new();
     let mut nn = Network::new(&[data_loader::INPUT_PIXELS, 36, 10], 3.0);
     let mut rng = rand::rng();
@@ -87,7 +96,7 @@ fn main() {
 
     test_nn_and_print_results(&nn, 0, &data.test_data_set, 0.0, DIGIT_NO_VISUALISATION);
 
-    for i in 0..network::MAX_EPOCH {
+    for epoch in 1..=network::MAX_EPOCH {
         let epoch_start = Instant::now();
         data.training_data_set.shuffle(&mut rng);
         nn.run_training_epoch(&data.training_data_set);
@@ -95,7 +104,7 @@ fn main() {
 
         test_nn_and_print_results(
             &nn,
-            i + 1,
+            epoch,
             &data.test_data_set,
             epoch_secs,
             digit_for_visualisation,
