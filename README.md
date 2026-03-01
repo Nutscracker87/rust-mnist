@@ -263,16 +263,14 @@ So for the whole layer, $\nabla w^{(l)} = \delta^{(l)} \otimes (a^{(l-1)})^\top$
 
 ---
 
-## Summary table
+## Summary (theory → code)
 
-| Theory                                                                                   | Code                                          |
-| ---------------------------------------------------------------------------------------- | --------------------------------------------- |
-| Forward:$z^{(l)} = W^{(l)} a^{(l-1)} + b^{(l)}$, $a^{(l)} = \sigma(z^{(l)})$         | `forward()`                                 |
-| Output delta:$\delta^{(L)} = (a^{(L)} - t) \odot \sigma'(z^{(L)})$                     | `compute_deltas()` (last layer)             |
-| Hidden delta:$\delta^{(l)} = (W^{(l+1)})^\top \delta^{(l+1)} \odot \sigma'(z^{(l)})$   | `compute_deltas()` (reverse loop)           |
-| $\partial C/\partial b = \delta$, $\partial C/\partial w = \delta \otimes a^{(l-1)}$ | `compute_gradients()`                       |
-| Mini-batch SGD: average gradients, then$w \leftarrow w - (\eta/n)\sum \nabla w$        | `process_batch()`, `run_training_epoch()` |
-| Prediction = argmax of output layer                                                      | `predict()`                                 |
+- **Forward:** $z^{(l)} = W^{(l)} a^{(l-1)} + b^{(l)}$, $a^{(l)} = \sigma(z^{(l)})$ → `forward()`
+- **Output delta:** $\delta^{(L)} = (a^{(L)} - t) \odot \sigma'(z^{(L)})$ → `compute_deltas()` (last layer)
+- **Hidden delta:** $\delta^{(l)} = (W^{(l+1)})^\top \delta^{(l+1)} \odot \sigma'(z^{(l)})$ → `compute_deltas()` (reverse loop)
+- **Gradients:** $\partial C/\partial b = \delta$, $\partial C/\partial w = \delta \otimes a^{(l-1)}$ → `compute_gradients()`
+- **Mini-batch SGD:** average gradients, then $w \leftarrow w - (\eta/n)\sum \nabla w$ → `process_batch()`, `run_training_epoch()`
+- **Prediction:** argmax of output layer → `predict()`
 
 ---
 
