@@ -1,4 +1,4 @@
-use ndarray::{Array1, Array2, ArrayView1, s};
+use ndarray::{Array1, Array2, ArrayView1};
 
 pub struct Sample {
     image: Array1<f32>,

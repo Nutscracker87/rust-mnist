@@ -100,48 +100,137 @@ impl Network {
         // Update weights and biases step
     }
 
-    pub fn visualize_matrix(matrix: Array2<f32>) {
-        let (_, cols) = matrix.dim();
-        // Grabs chunks of 2 rows at a time
-        for chunk in matrix.axis_chunks_iter(ndarray::Axis(0), 2) {
-            let top_row = chunk.row(0);
-            // Handle odd-numbered total rows
-            let bottom_row = if chunk.nrows() > 1 {
-                Some(chunk.row(1))
-            } else {
-                None
-            };
+    pub fn display_weights(&self, weights: ArrayView1<f32>, height: usize, width: usize) {
+        //let image: Array2<f32> = Array2::from_shape_vec((28, 28), pixels.to_vec()).unwrap();
+        let image_to_process: Array2<f32> =
+            Array2::from_shape_vec((height, width), weights.to_vec()).unwrap();
+        // We iterate 2 rows at a time because 1 char = 2 vertical pixels
+        for y in (0..height).step_by(2) {
+            for x in 0..width {
+                let top = image_to_process[[y, x]];
+                let bottom = if y + 1 < height {
+                    image_to_process[[y + 1, x]]
+                } else {
+                    0.0
+                };
 
-            for x in 0..cols {
-                let t_val = top_row[x];
-                let b_val = bottom_row.map(|r| r[x]).unwrap_or(0.0);
+                // ANSI colors: 232-255 are grayscale levels
+                let top_color = 232 + (top * 23.0) as u8;
+                let bottom_color = 232 + (bottom * 23.0) as u8;
 
-                let t_clr = 232 + (t_val * 23.0) as u8;
-                let b_clr = 232 + (b_val * 23.0) as u8;
-                print!("\x1b[38;5;{}m\x1b[48;5;{}m▀", t_clr, b_clr);
+                // \x1b[38;5;...m sets foreground (top)
+                // \x1b[48;5;...m sets background (bottom)
+                print!("\x1b[38;5;{}m\x1b[48;5;{}m▀", top_color, bottom_color);
             }
-            println!("\x1b[0m");
+            println!("\x1b[0m"); // Reset colors at end of line
         }
     }
 
-    pub fn predict(&self, sample: &Sample) -> usize {
+    pub fn display_active_weights(&self, layers_activations: &[Array1<f32>], target: &Sample) {
+        println!(
+            "================= Target Digit: {} ===============",
+            target.get_label_as_digit()
+        );
+        target.display_digit();
+        for layer_idx in 0..self.layers.len() {
+            let shape = self.layers[layer_idx].weights.row(0).dim();
+            let mut neuron_average_weights: Array1<f32> = Array1::zeros(shape);
+            let mut num_of_active_neurons = 0;
+
+            for neuron_num in 0..self.layers[layer_idx].weights.nrows() {
+                let activation = layers_activations[layer_idx + 1][neuron_num];
+                if activation > 0.3 {
+                    num_of_active_neurons += 1;
+                    neuron_average_weights += &self.layers[layer_idx].weights.row(neuron_num);
+                    // weights: ArrayView1<f32> = self.layers[layer_idx].weights.row(neuron_num);
+                    // if layer_idx > 0 {
+                    //     self.print_neuron_weights(
+                    //         layer_idx,
+                    //         self.layers[layer_idx].weights.row(neuron_num).view(),
+                    //         num_of_active_neurons,
+                    //     );
+                    // }
+                }
+            }
+
+            if num_of_active_neurons > 0 {
+                neuron_average_weights /= num_of_active_neurons as f32;
+            }
+
+            self.print_neuron_weights(
+                layer_idx,
+                neuron_average_weights.view(),
+                num_of_active_neurons,
+            );
+            // if layer_idx == 0 {
+            //     self.print_neuron_weights(
+            //         layer_idx,
+            //         neuron_average_weights.view(),
+            //         num_of_active_neurons,
+            //     );
+            // }
+        }
+    }
+
+    pub fn print_neuron_weights(
+        &self,
+        layer: usize,
+        neuron_average_weights: ArrayView1<f32>,
+        num_of_active_neurons: usize,
+    ) {
+        let weights_num = neuron_average_weights.iter().count();
+        let weights_activators_num = neuron_average_weights
+            .iter()
+            .filter(|&x| *x > 1.0 / (weights_num as f32))
+            .count();
+        println!(
+            "Layer: {}, Activated Neurons: {}, Weights Activators: {}. Average Weights Distribution:",
+            layer, num_of_active_neurons, weights_activators_num
+        );
+        let (height, width) = &Self::infer_grid_shape(neuron_average_weights.len());
+        self.display_weights(neuron_average_weights, *height, *width);
+        // if layer == 0 {
+        //     self.display_weights(neuron_average_weights, 28, 28);
+        // }
+
+        // if layer == 1 {
+        //     self.display_weights(neuron_average_weights, 6, 6);
+        // }
+    }
+
+    /// Picks (height, width) so that height * width == n and the grid is as square as possible.
+    fn infer_grid_shape(n: usize) -> (usize, usize) {
+        if n == 0 {
+            return (1, 0);
+        }
+        let mut h = (n as f32).sqrt().floor() as usize;
+        if h == 0 {
+            h = 1;
+        }
+        while n % h != 0 && h > 1 {
+            h -= 1;
+        }
+        let w = n / h;
+        (h, w)
+    }
+
+    pub fn predict(&self, sample: &Sample) -> (usize, Vec<Array1<f32>>) {
         let (layers_activations, _) = self.forward(sample);
         //current_layer_activations
-        let (predicted, _) = layers_activations.last().expect("Last layer activations should exists")
+        let (predicted, _) = layers_activations
+            .last()
+            .expect("Last layer activations should exists")
             .iter()
             .enumerate()
-            .fold(
-            (0, 0.0),
-            |(max_idx, max_val), (idx, &val)| {
+            .fold((0, 0.0), |(max_idx, max_val), (idx, &val)| {
                 if val > max_val {
                     (idx, val)
                 } else {
                     (max_idx, max_val)
                 }
-            }
-        );
+            });
 
-        predicted
+        (predicted, layers_activations)
     }
 
     pub fn forward(&self, sample: &Sample) -> (Vec<Array1<f32>>, Vec<Array1<f32>>) {
