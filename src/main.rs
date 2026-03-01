@@ -8,13 +8,29 @@ mod data_loader;
 pub mod network;
 pub mod sample;
 
+/// Parses optional `--digit N` or `-d N` (N in 0..=9). Returns `None` if not provided or invalid.
+fn parse_digit_arg() -> Option<usize> {
+    let mut args = std::env::args().skip(1);
+    while let Some(arg) = args.next() {
+        if arg == "--digit" || arg == "-d" {
+            let next = args.next()?;
+            let n: u8 = next.parse().ok()?;
+            if n <= 9 {
+                return Some(n as usize);
+            }
+        }
+    }
+    None
+}
+
 /// Train a small MLP on MNIST and report accuracy each epoch. Optionally print weight visualisations at the end.
+/// Use `--digit N` or `-d N` (N 0-9) to visualise that digit; otherwise a random digit is chosen.
 fn main() {
     println!("Hello, my new neural network!");
     let mut data = data_loader::MnistData::new();
     let mut nn = Network::new(&[data_loader::INPUT_PIXELS, 36, 10], 3.0);
     let mut rng = rand::rng();
-    let random_digit_for_visualisation = rng.random_range(0..10);
+    let digit_for_visualisation = parse_digit_arg().unwrap_or_else(|| rng.random_range(0..10));
 
     test_nn_and_print_results(&nn, 0, &data.test_data_set, 0.0, 99);
 
@@ -31,7 +47,7 @@ fn main() {
             i + 1,
             &data.test_data_set,
             epoch_secs,
-            random_digit_for_visualisation as usize,
+            digit_for_visualisation,
         );
     }
 
