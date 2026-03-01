@@ -74,14 +74,14 @@ The `--` ensures `--digit` / `-d` are passed to your program, not to Cargo.
 
 ## Project structure and workflow
 
-| Step                     | What happens                                                                                                 | Code                                                                                                  |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
-| **Data**           | Load MNIST, normalize pixels to [0,1], one-hot labels (e.g. digit 5 →`[0,0,0,0,0,1,0,0,0,0]`).            | `data_loader::MnistData::new()`, `Sample::new()`                                                  |
-| **Build network**  | Create MLP with layer sizes and learning rate (shape is configurable in `main.rs`). | `Network::new(&[784, 36, 10], learning_rate)` — use e.g. `&[784, 64, 32, 10]` for two hidden layers |
-| **One epoch**      | Shuffle data, split into mini-batches (size 32), run one gradient step per batch.                            | `run_training_epoch()` → `process_batch()`                                                       |
-| **One batch step** | For each sample: forward → deltas → gradients; sum over batch; update weights/biases with step $-\eta/n$. | `process_batch()` → `backprop()` → `forward()`, `compute_deltas()`, `compute_gradients()` |
-| **Inference**      | Forward pass only; predicted digit = argmax of output layer.                                                 | `predict()`                                                                                         |
-| **Visualisation**  | On final epoch: show average weight maps for a chosen digit (neurons with activation > 0.3).                 | `display_active_weights()`, `display_weights()`                                                   |
+| Step                     | What happens                                                                                                 | Code                                                                                                     |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| **Data**           | Load MNIST, normalize pixels to [0,1], one-hot labels (e.g. digit 5 →`[0,0,0,0,0,1,0,0,0,0]`).            | `data_loader::MnistData::new()`, `Sample::new()`                                                     |
+| **Build network**  | Create MLP with layer sizes and learning rate (shape is configurable in `main.rs`).                        | `Network::new(&[784, 36, 10], learning_rate)` — use e.g. `&[784, 64, 32, 10]` for two hidden layers |
+| **One epoch**      | Shuffle data, split into mini-batches (size 32), run one gradient step per batch.                            | `run_training_epoch()` → `process_batch()`                                                          |
+| **One batch step** | For each sample: forward → deltas → gradients; sum over batch; update weights/biases with step$-\eta/n$. | `process_batch()` → `backprop()` → `forward()`, `compute_deltas()`, `compute_gradients()`    |
+| **Inference**      | Forward pass only; predicted digit = argmax of output layer.                                                 | `predict()`                                                                                            |
+| **Visualisation**  | On final epoch: show average weight maps for a chosen digit (neurons with activation > 0.3).                 | `display_active_weights()`, `display_weights()`                                                      |
 
 **Loss:** Mean squared error (MSE) over outputs: $C = \frac{1}{2} \sum_j (a_j^{(L)} - t_j)^2$.
 
@@ -143,6 +143,26 @@ For one (input, target) pair:
 - **Weight visualisation (final epoch only):** For a chosen digit, find test samples with that label; for each layer, average the weight vectors of neurons with activation > 0.3, then render the average as a 2D grid in the terminal. → `display_active_weights()`, `print_neuron_weights()`, `display_weights()`.
 
 **Entry point:** `test_nn_and_print_results()` calls `nn.predict(sample)` and, when appropriate, `nn.display_active_weights()`.
+
+---
+
+## Custom visualisation: activated weights aggregation
+
+To better understand how the network learns, I developed a custom method to "see" what the model is looking at.
+
+![Preview: correctly and incorrectly predicted digits with average weight maps per layer](linkedin-preview.png)
+
+**How it works:**
+
+1. **Thresholding:** During inference, I track neurons whose activation is **> 0.3** for each layer.
+2. **Aggregation:** I sum the weight vectors of these active neurons.
+3. **Normalization:** The result is averaged by the number of active neurons to produce a single composite image per layer.
+
+This gives a view of the "internal prototypes" the network has learned for each digit. The visualisation helps explain both **properly predicted** cases (what the model focused on) and **incorrectly predicted** ones (e.g. why an 8 was confused with a 2 or 5).
+
+**About this visualisation:** On the final epoch I show only **2 correct** and **2 incorrect** examples per chosen digit - enough to get a feel for what the network is doing, without turning this into an analysis tool. The goal here is to sanity-check that the "brain" structure works: we can see that active neurons and their averaged weights line up with the digit and with the kinds of mistakes the model makes.
+
+**Colors:** Weight maps are drawn in the terminal with ANSI 256-color grayscale (dark → light) for values in the 0–1 range. Weights that have grown outside that range during training wrap into the color palette (e.g. red/green/blue for larger positive values), so stronger or out-of-range weights show up as colored pixels — a quick way to spot which parts of the input the layer is responding to most.
 
 ---
 
@@ -236,6 +256,7 @@ So for the whole layer, $\nabla w^{(l)} = \delta^{(l)} \otimes (a^{(l-1)})^\top$
    w \leftarrow w - \frac{\eta}{n} \sum \nabla w, \qquad
    b \leftarrow b - \frac{\eta}{n} \sum \nabla b
    $$
+
    with $n$ = batch size. In code: negative step $-\eta/n$ is passed to `update_weights` / `update_biases` (which do `scaled_add(step, grad)`), so we subtract the average gradient.
 
 **In code:** `backprop()` does steps 1–3. `process_batch()` loops over the batch, calls `backprop()` for each sample, accumulates gradients, then applies the update with step $-\eta/n$.
@@ -246,11 +267,11 @@ So for the whole layer, $\nabla w^{(l)} = \delta^{(l)} \otimes (a^{(l-1)})^\top$
 
 | Theory                                                                                   | Code                                          |
 | ---------------------------------------------------------------------------------------- | --------------------------------------------- |
-| Forward: $z^{(l)} = W^{(l)} a^{(l-1)} + b^{(l)}$, $a^{(l)} = \sigma(z^{(l)})$ | `forward()` |
-| Output delta: $\delta^{(L)} = (a^{(L)} - t) \odot \sigma'(z^{(L)})$ | `compute_deltas()` (last layer) |
-| Hidden delta: $\delta^{(l)} = (W^{(l+1)})^\top \delta^{(l+1)} \odot \sigma'(z^{(l)})$ | `compute_deltas()` (reverse loop) |
-| $\partial C/\partial b = \delta$, $\partial C/\partial w = \delta \otimes a^{(l-1)}$ | `compute_gradients()` |
-| Mini-batch SGD: average gradients, then $w \leftarrow w - (\eta/n)\sum \nabla w$ | `process_batch()`, `run_training_epoch()` |
+| Forward:$z^{(l)} = W^{(l)} a^{(l-1)} + b^{(l)}$, $a^{(l)} = \sigma(z^{(l)})$         | `forward()`                                 |
+| Output delta:$\delta^{(L)} = (a^{(L)} - t) \odot \sigma'(z^{(L)})$                     | `compute_deltas()` (last layer)             |
+| Hidden delta:$\delta^{(l)} = (W^{(l+1)})^\top \delta^{(l+1)} \odot \sigma'(z^{(l)})$   | `compute_deltas()` (reverse loop)           |
+| $\partial C/\partial b = \delta$, $\partial C/\partial w = \delta \otimes a^{(l-1)}$ | `compute_gradients()`                       |
+| Mini-batch SGD: average gradients, then$w \leftarrow w - (\eta/n)\sum \nabla w$        | `process_batch()`, `run_training_epoch()` |
 | Prediction = argmax of output layer                                                      | `predict()`                                 |
 
 ---
