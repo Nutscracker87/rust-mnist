@@ -8,6 +8,7 @@ mod data_loader;
 pub mod network;
 pub mod sample;
 
+/// Train a small MLP on MNIST and report accuracy each epoch. Optionally print weight visualisations at the end.
 fn main() {
     println!("Hello, my new neural network!");
     let mut data = data_loader::MnistData::new();
@@ -19,8 +20,7 @@ fn main() {
 
     for i in 0..network::MAX_EPOCH {
         let epoch_start = Instant::now();
-        // need to shuffle data for better learning, by default mnist is ordered sequentially by digit class.
-        // we need to shuffle data for each epoch to get better results
+        // Shuffle each epoch so batches are not ordered by digit class.
         data.training_data_set.shuffle(&mut rng);
         nn.run_training_epoch(&data.training_data_set);
 
@@ -35,7 +35,8 @@ fn main() {
         );
     }
 
-    pub fn test_nn_and_print_results(
+    // Runs the test set, counts correct predictions, and optionally prints weight visualisations for a chosen digit.
+    fn test_nn_and_print_results(
         nn: &Network,
         epoch: usize,
         test_data_set: &Vec<Sample>,
@@ -75,22 +76,5 @@ fn main() {
             epoch_secs
         );
     }
-
-    // let first_digit = data
-    //     .training_data_set
-    //     .first()
-    //     .expect("Cant find first digit");
-
-    // println!(
-    //     "The first example label is: {}",
-    //     first_digit.get_label_as_digit()
-    // );
-    // println!("The first example image is");
-    // first_digit.dispaly_digit();
-
-    // println!("NN initialized");
-    // for layer in nn.layers {
-    //     println!("Layer shape: {:?}", layer.weights.shape());
-    //     println!("Layer values: {:?}", layer.weights);
-    // }
 }
+
